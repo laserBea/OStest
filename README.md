@@ -12,4 +12,4 @@ Pintos labs (add lab0 and fix some bugs for MacOS). For students in PKU, please
 download the release version skeleton code by `git clone git@github.com:PKU-OS/pintos.git`.
 
 
-## 2024 autumn OS 王少雄 10224507019
+### 2024 autumn OS 王少雄 10224507019
