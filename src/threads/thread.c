@@ -11,6 +11,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "devices/timer.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -619,12 +620,24 @@ void check_and_wakeup_sleep_thread(void){
   
   while(e!=list_end(&all_list)){
     struct thread *t=list_entry(e,struct thread,allelem);
+    struct thread *cur=thread_current();
+
     enum intr_level old_level=intr_disable();
+    
     if(t->status==THREAD_SLEEPING&&cur_ticks>=t->wait_time){
       t->status=THREAD_READY;
+      // list_push_back (&ready_list, &t->elem);
       list_insert_ordered(&ready_list,&t->elem,priority_cmp_fun,cur_ticks);
-      printf("wake up thread %s at tick %lld.\n",t->name,cur_ticks);
+      printf("wake up thread %s with priority %d at tick %lld.\n",t->name,t->priority,cur_ticks);
+      
+      if (t->priority > cur->priority) {
+        intr_set_level(old_level); 
+        if (!intr_context()) {
+          thread_yield();  
+        }
+      }
     }
+
     e=list_next(e);
     intr_set_level(old_level);  
   }
