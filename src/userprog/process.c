@@ -28,21 +28,43 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 tid_t
 process_execute (const char *file_name) 
 {
-  char *fn_copy;
+  // char *fn_copy;
   tid_t tid;
 
-  /* Make a copy of FILE_NAME.
-     Otherwise there's a race between the caller and load(). */
-  fn_copy = palloc_get_page (0);
-  if (fn_copy == NULL)
-    return TID_ERROR;
-  strlcpy (fn_copy, file_name, PGSIZE);
+  char *fn_copy = malloc(strlen(file_name)+1);
+  char *fn_copy2 = malloc(strlen(file_name)+1);
+  strlcpy(fn_copy, file_name, strlen(file_name)+1);
+  strlcpy(fn_copy2, file_name, strlen(file_name)+1);
 
-  /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
-  if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
+  char *save_ptr;
+  fn_copy2 = strtok_r(fn_copy2, " ", &save_ptr);
+  tid = thread_create(fn_copy2, PRI_DEFAULT, start_process, fn_copy);
+  free(fn_copy2);
+
+  if(tid==TID_ERROR){
+    free(fn_copy);
+    return tid;
+  }
+  sema_down(&thread_current()->sema);
+  if(!thread_current()->success) return TID_ERROR;
   return tid;
+}
+
+void
+push_argument (void **esp, int argc, int argv[]){
+  *esp = (int)*esp & 0xfffffffc;
+  *esp -= 4;
+  *(int *) *esp = 0;
+  for(int i = argc-1; i >=0; i--){
+    *esp -= 4;
+    *(int *) *esp = argv[i];
+  }
+  *esp -= 4;
+  *(int *) *esp = (int) *esp + 4;
+  *esp -= 4;
+  *(int *) *esp = argc;
+  *esp -= 4;
+  *(int *) *esp =0;
 }
 
 /** A thread function that loads a user process and starts it
@@ -54,17 +76,43 @@ start_process (void *file_name_)
   struct intr_frame if_;
   bool success;
 
+  char *fn_copy=malloc(strlen(file_name)+1);
+  strlcpy(fn_copy, file_name, strlen(file_name)+1);
+
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
+
+  char *token, *save_ptr;
+  file_name = strtok_r(file_name, " ", &save_ptr);
+  // printf("FILENAME====%s     ++++++++++++\n",file_name);
+
   success = load (file_name, &if_.eip, &if_.esp);
 
-  /* If load failed, quit. */
-  palloc_free_page (file_name);
-  if (!success) 
-    thread_exit ();
+  if(success){
+    int argc = 0;
+    int argv[50];
+    for(token = strtok_r(fn_copy, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr)){
+      if_.esp -= strlen(token)+1;
+      memcpy(if_.esp, token, strlen(token)+1);
+      argv[argc++] = (int) if_.esp;
+    }
+    push_argument(&if_.esp, argc, argv);
+    thread_current()->parent->success = true;
+    sema_up(&thread_current()->parent->sema);
+  }
+  else{
+    thread_current()->parent->success = false;
+    sema_up(&thread_current()->parent->sema);
+    thread_exit();
+  }
+
+  // /* If load failed, quit. */
+  // palloc_free_page (file_name);
+  // if (!success) 
+  //   thread_exit ();
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -85,10 +133,32 @@ start_process (void *file_name_)
 
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
-int
-process_wait (tid_t child_tid UNUSED) 
+int 
+process_wait(tid_t child_tid UNUSED)
 {
-  return -1;
+  struct list *l = &thread_current()->childs;
+  struct list_elem *temp;
+  temp = list_begin(l);
+  struct child *temp2 = NULL;
+  while(temp != list_end(l)){
+    temp2 = list_entry(temp, struct child, child_elem);
+    if(temp2->tid == child_tid){
+      if(!temp2->isrun){
+        temp2->isrun = true;
+        sema_down(&temp2->sema);
+        break;
+      }
+      else{
+        return -1;
+      }
+    }
+    temp = list_next(temp);
+  }
+  if(temp == list_end(l)){
+    return -1;
+  }
+  list_remove(temp);
+  return temp2->store_exit;
 }
 
 /** Free the current process's resources. */
@@ -221,6 +291,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
   process_activate ();
 
+  acquire_lock_f();
   /* Open executable file. */
   file = filesys_open (file_name);
   if (file == NULL) 
@@ -228,6 +299,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
+
+  file_deny_write(file);
+  t->file_owned = file;
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -312,7 +386,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+  // file_close (file);
+  release_lock_f();
   return success;
 }
 
