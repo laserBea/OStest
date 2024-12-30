@@ -40,20 +40,21 @@ void
 syscall_init (void) 
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
-  // 进程的系统调用
+  // process syscall
   syscalls[SYS_HALT] = &sys_halt;
   syscalls[SYS_EXIT] = &sys_exit;
   // syscalls[SYS_EXEC] = &sys_exec;
   syscalls[SYS_WAIT] = &sys_wait;
-  // 文件的系统调用
-  // syscalls[SYS_CREATE] = &sys_create;
+  
+  // file syscall
+  syscalls[SYS_CREATE] = &sys_create;
   // syscalls[SYS_REMOVE] = &sys_remove;
-  // syscalls[SYS_OPEN] = &sys_open;
+  syscalls[SYS_OPEN] = &sys_open;
   syscalls[SYS_WRITE] = &sys_write;
   // syscalls[SYS_SEEK] = &sys_seek;
   // syscalls[SYS_TELL] = &sys_tell;
   // syscalls[SYS_CLOSE] = &sys_close;
-  // syscalls[SYS_READ] = &sys_read;
+  syscalls[SYS_READ] = &sys_read;
   // syscalls[SYS_FILESIZE] = &sys_filesize;
 }
 
@@ -115,10 +116,47 @@ sys_exit (struct intr_frame *f){
 }
 
 void 
+sys_wait(struct intr_frame *f)
+{
+  uint32_t *user_ptr = f->esp;
+  // check_ptr(user_ptr+1);
+  *user_ptr++;
+  f->eax = process_wait(*user_ptr);
+}
+
+void
+sys_create(struct intr_frame *f){
+  uint32_t *usr_ptr=f->esp;
+  *usr_ptr++;
+  acquire_lock_f();
+  f->eax=filesys_create((const char*)*usr_ptr,*(usr_ptr+1));
+  release_lock_f();
+}
+
+void
+sys_open(struct intr_frame *f){
+  uint32_t *usr_ptr=f->esp;
+  acquire_lock_f();
+  struct file* file_opened =filesys_open((const char *) * usr_ptr);
+  release_lock_f();
+  struct thread *t =thread_current();
+  if(file_opened){
+    struct thread_file *thread_file_temp =malloc(sizeof(struct thread_file));
+    thread_file_temp->fd=t->file_fd++;
+    thread_file_temp->file=file_opened;
+    list_push_back(&t->files,&thread_file_temp->file_elem);
+    f->eax=thread_file_temp->fd;
+  }
+  else{
+    f->eax=-1;
+  }
+}
+
+void 
 sys_write (struct intr_frame *f){
   uint32_t *user_ptr = f->esp;
   // check_ptr(user_ptr+7);
-   //check_ptr(*(user_ptr+6));
+  // check_ptr(*(user_ptr+6));
   *user_ptr++;
   int temp2 = *user_ptr;
   const char *buffer = (const char *)*(user_ptr+1);
@@ -141,10 +179,28 @@ sys_write (struct intr_frame *f){
 }
 
 void 
-sys_wait(struct intr_frame *f)
-{
-  uint32_t *user_ptr = f->esp;
-  // check_ptr(user_ptr+1);
-  *user_ptr++;
-  f->eax = process_wait(*user_ptr);
+sys_read(struct intr_frame *f){
+    uint32_t *usr_ptr=f->esp;
+    *usr_ptr++;
+    int fd=*usr_ptr;
+    int i;
+    uint8_t *buffer=(uint8_t *)*(usr_ptr+1);
+    off_t size =*(usr_ptr+2);
+
+    if(fd==0){
+      for(i=0;i<size;i++)
+        buffer[i]=input_getc();
+      f->eax=size;
+    }
+    else{
+      struct thread_file *thread_file_temp=find_file_id(*usr_ptr);
+      if(thread_file_temp){
+        acquire_lock_f();
+        f->eax=file_read(thread_file_temp,buffer,size);
+        release_lock_f();      
+      }
+      else
+        f->eax=-1;
+    }
 }
+

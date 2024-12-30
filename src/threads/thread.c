@@ -211,7 +211,7 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
 
-  // 新内容的初始化
+  // initialize child thread
   t->thread_child = malloc(sizeof(struct child));
   t->thread_child->tid = tid;
   sema_init(&t->thread_child->sema, 0);

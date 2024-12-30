@@ -28,7 +28,6 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 tid_t
 process_execute (const char *file_name) 
 {
-  // char *fn_copy;
   tid_t tid;
 
   char *fn_copy = malloc(strlen(file_name)+1);
@@ -87,8 +86,6 @@ start_process (void *file_name_)
 
   char *token, *save_ptr;
   file_name = strtok_r(file_name, " ", &save_ptr);
-  // printf("FILENAME====%s     ++++++++++++\n",file_name);
-
   success = load (file_name, &if_.eip, &if_.esp);
 
   if(success){

@@ -26,14 +26,6 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /**< Default priority. */
 #define PRI_MAX 63                      /**< Highest priority. */
 
-struct child{
-   tid_t tid;
-   bool isrun;
-   struct list_elem child_elem;
-   struct semaphore sema;
-   int store_exit;
-};
-
 /** A kernel thread or user process.
 
    Each thread structure is stored in its own 4 kB page.  The
@@ -114,15 +106,23 @@ struct thread
 
     struct list childs;
     struct child *thread_child;
-    int st_exit;
-    struct semaphore sema;
     bool success;
+    struct semaphore sema;
     struct thread *parent;
-
+    int st_exit;
     struct list files;
     int file_fd;
+
     struct file *file_owned;
   };
+
+struct child{
+   tid_t tid;
+   bool isrun;
+   struct list_elem child_elem;
+   struct semaphore sema;
+   int store_exit;
+};
 
 struct thread_file
    {
