@@ -110,9 +110,9 @@ struct thread
     struct semaphore sema;
     struct thread *parent;
     int st_exit;
+    
     struct list files;
     int file_fd;
-
     struct file *file_owned;
   };
 

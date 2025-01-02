@@ -54,7 +54,8 @@ push_argument (void **esp, int argc, int argv[]){
   *esp = (int)*esp & 0xfffffffc;
   *esp -= 4;
   *(int *) *esp = 0;
-  for(int i = argc-1; i >=0; i--){
+  for (int i = argc - 1; i >= 0; i--)
+  {
     *esp -= 4;
     *(int *) *esp = argv[i];
   }
@@ -63,7 +64,7 @@ push_argument (void **esp, int argc, int argv[]){
   *esp -= 4;
   *(int *) *esp = argc;
   *esp -= 4;
-  *(int *) *esp =0;
+  *(int *) *esp = 0;
 }
 
 /** A thread function that loads a user process and starts it
@@ -92,7 +93,7 @@ start_process (void *file_name_)
     int argc = 0;
     int argv[50];
     for(token = strtok_r(fn_copy, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr)){
-      if_.esp -= strlen(token)+1;
+      if_.esp -= (strlen(token)+1);
       memcpy(if_.esp, token, strlen(token)+1);
       argv[argc++] = (int) if_.esp;
     }
